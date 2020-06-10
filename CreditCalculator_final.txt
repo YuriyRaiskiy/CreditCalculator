@@ -1,0 +1,163 @@
+import sys
+import time
+from math import log, ceil, floor
+
+class CreditCalculator:
+
+    def __init__(self):
+        # initialize class variables
+        self.executionError = False
+        self.output_message = str()
+        self.overpayment_message = str()
+        # create dictionary with all correct user input combinations
+        self.correct_input_combinations = {
+            'diff/annuity_payment': {'--type': str, '--principal': int, '--periods': int,
+                                     '--interest': float},
+            'annuity_principal': {'--type': str, '--payment': int, '--periods': int,
+                                  '--interest': float},
+            'annuity_periods': {'--type': str, '--principal': int, '--payment': int,
+                                '--interest': float}}
+        # specify default calculation set parameters for instance
+        # create dictionary with calculation parameters from user console input
+        self.user_calculation_parameters = {sys.argv[i].split("=")[0]: sys.argv[i].split("=")[1]
+                                            for i in range(1, len(sys.argv))}
+        self.user_payment_type = None
+        self.calculation_set = None
+        self.incorrect_parameters = False
+
+    def check_input(self):
+        # Input check#1: check if NUMBER OF PARAMETERS provided by user is correct
+        if len(self.user_calculation_parameters.keys()) < 4:
+            # self.executionError = True
+            print('Incorrect parameters')
+            self.incorrect_parameters = True
+
+        # Input check#2: check if SET OF PARAMETERS provided by user is correct
+        # check if user wants to calculate differentiated payment and provided correct set of calculation parameters
+        elif self.user_calculation_parameters['--type'] == 'diff' and \
+                self.user_calculation_parameters.keys() != self.correct_input_combinations[
+            'diff/annuity_payment'].keys():
+            print('Incorrect parameters')
+            self.incorrect_parameters = True
+        # check for annuity payments
+        elif all([self.user_calculation_parameters.keys() != self.correct_input_combinations[input_set].keys()
+                  for input_set in self.correct_input_combinations.keys()]):
+            # self.executionError = True
+            print('Incorrect parameters')
+            self.incorrect_parameters = True
+
+        # Input check#3: check for NEGATIVE VALUES in user input set
+        for parameter in self.user_calculation_parameters.values():
+            try:
+                if int(parameter) < 0:
+                    print('Incorrect parameters')
+                    self.incorrect_parameters = True
+            except TypeError and ValueError:
+                continue
+
+        # specify with type of payment - annuity or differentiated will be used for calculations
+        self.user_payment_type = self.user_calculation_parameters['--type']
+        # specify which INPUT COMBINATION set will be used for calculations
+        self.user_calculation_parameters.keys()
+        for input_set in self.correct_input_combinations.keys():
+            # print(self.correct_input_combinations[input_set].keys())
+            if self.user_calculation_parameters.keys() == self.correct_input_combinations[input_set].keys():
+                self.calculation_set = input_set
+                break
+
+    def calculate_DP(self, overall_payment=0):
+        # calculate differentiated payment for each period, overall payment and format output message
+        for current_period in range(1, int(self.user_calculation_parameters['--periods']) + 1):
+            differentiated_payment = int(self.user_calculation_parameters['--principal']) / int(
+                self.user_calculation_parameters['--periods']) \
+                                     + (float(self.user_calculation_parameters['--interest']) / (12 * 100)) * (
+                                             int(self.user_calculation_parameters['--principal'])
+                                             - int(self.user_calculation_parameters['--principal']) * (
+                                                     current_period - 1)
+                                             / int(self.user_calculation_parameters['--periods']))
+            overall_payment += ceil(differentiated_payment)
+            self.output_message += f'Month {current_period}: paid out {ceil(differentiated_payment)}\n'
+        # calculate overpayment and format overpayment message
+        self.overpayment_message = f'\nOverpayment = {overall_payment - int(self.user_calculation_parameters["--principal"])}'
+        return self.output_message + self.overpayment_message
+
+    def calculate_AP(self):
+        # calculate annuity payment
+        annuity_payment = ceil(
+            int(self.user_calculation_parameters['--principal']) * float(
+                self.user_calculation_parameters['--interest']) / (12 * 100) * pow(
+                1 + float(self.user_calculation_parameters['--interest']) / (12 * 100),
+                int(self.user_calculation_parameters['--periods'])) / (
+                    pow(1 + float(self.user_calculation_parameters['--interest']) / (12 * 100),
+                        int(self.user_calculation_parameters['--periods'])) - 1))
+        # format output message
+        self.output_message = f'Your annuity payment = {annuity_payment}!\n'
+        # calculate overpayment and format overpayment message
+        self.overpayment_message = f'Overpayment = {annuity_payment * int(self.user_calculation_parameters["--periods"]) - int(self.user_calculation_parameters["--principal"])}'
+        return self.output_message + self.overpayment_message
+
+    def calculate_COM(self):
+        # calculate duration of payment
+        count_of_months = ceil(log(int(self.user_calculation_parameters['--payment']) / (
+                    int(self.user_calculation_parameters['--payment']) - float(
+                self.user_calculation_parameters['--interest']) / (12 * 100) * int(
+                self.user_calculation_parameters['--principal'])),
+                                   1 + float(self.user_calculation_parameters['--interest']) / (12 * 100)))
+        # format derived value to give readable output in format 'years, months'
+        payment_years = count_of_months // 12
+        payment_months = count_of_months % 12
+        # format output message - refine format of user output based on calculated duration
+        if all((payment_years != 0, payment_months != 0)):
+            self.output_message = f'You need {payment_years} years and {payment_months} months to repay this credit!\n'
+        elif payment_years == 0:
+            self.output_message = f'You need {payment_months} month{"s" * (payment_months - 1)} to repay this credit!\n'
+        elif payment_months == 0:
+            self.output_message = f'You need {payment_years} year{"s" * (payment_years - 1)} to repay this credit!\n'
+        # calculate and format overpayment message
+        self.overpayment_message = f'Overpayment = {int(int(self.user_calculation_parameters["--payment"]) * count_of_months - int(self.user_calculation_parameters["--principal"]))}'
+        # output message for user including overpayment
+        return self.output_message + self.overpayment_message
+
+    def calculate_CP(self):
+        # calculate credit principal
+        credit_principal = floor(int(self.user_calculation_parameters['--payment']) * (
+                pow(1 + float(self.user_calculation_parameters['--interest']) / (12 * 100),
+                    int(self.user_calculation_parameters['--periods'])) - 1) / (
+                                         float(self.user_calculation_parameters['--interest']) / (12 * 100) * pow(
+                                     1 + float(self.user_calculation_parameters['--interest']) / (12 * 100), int(
+                                         self.user_calculation_parameters['--periods']))))
+        # format output message
+        self.output_message = f'Your credit principal = {credit_principal}!\n'
+        # calculate overpayment and format overpayment message
+        self.overpayment_message = f'Overpayment = {int(int(self.user_calculation_parameters["--payment"]) * int(self.user_calculation_parameters["--periods"]) - credit_principal)}'
+        # output message for user including overpayment
+        return self.output_message + self.overpayment_message
+
+    def user_calculations(self):
+        # check user input
+        CreditCalculator.check_input(self)
+
+        # if user input is correct specify 1 of 4 calculation options
+        if not(self.incorrect_parameters):
+            if self.user_calculation_parameters['--type'] == 'diff' and self.calculation_set == 'diff/annuity_payment':
+                print(CreditCalculator.calculate_DP(self))
+            elif self.user_calculation_parameters['--type'] == 'annuity' and self.calculation_set == 'diff/annuity_payment':
+                print(CreditCalculator.calculate_AP(self))
+            elif self.user_calculation_parameters['--type'] == 'annuity' and self.calculation_set == 'annuity_principal':
+                print(CreditCalculator.calculate_CP(self))
+            elif self.user_calculation_parameters['--type'] == 'annuity' and self.calculation_set == 'annuity_periods':
+                print(CreditCalculator.calculate_COM(self))
+
+        # if self.user_choice == 'n':
+        # print(CreditCalculator.calculate_COM(self))
+        # elif self.user_choice == 'a':
+        # print(CreditCalculator.calculate_AP(self))
+        # elif self.user_choice == 'p':
+        # print(CreditCalculator.calculate_CP(self))
+        # elif self.user_choice == 'd':
+        # print(CreditCalculator.calculate_DP(self))
+
+
+# write your code here
+calculator = CreditCalculator()
+calculator.user_calculations()
